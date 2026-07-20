@@ -18,18 +18,20 @@ namespace esf {
  *  - Stale slots from an older firmware version are detected via the
  *    version field.
  *  - The raw bytes written to / read from storage are contiguous:
- *      [ ObjectHeader (12 bytes) | T (sizeof(T) bytes) ]
+ *      [ ObjectHeader (16 bytes) | T (sizeof(T) bytes) ]
  *
  * @tparam T   Plain data type to persist.  Must be trivially copyable and
  *             must not contain pointers (pointers are meaningless after a
  *             power cycle).
  * @tparam Ver Version tag — increment whenever the layout of T changes
  *             in a way that requires a migration step.
+ * @tparam ObjectId  Stable logical identity for this persisted object type.
  */
-template <typename T, uint16_t Ver = 1>
-    requires std::is_trivially_copyable_v<T>
+template <typename T, uint16_t Ver = 1, uint16_t ObjectId = 0u>
+    requires std::is_trivially_copyable_v<T> && std::is_standard_layout_v<T>
 struct StorageObject {
     static constexpr uint16_t kVersion  = Ver;
+    static constexpr uint16_t kObjectId = ObjectId;
     static constexpr uint32_t kDataSize = static_cast<uint32_t>(sizeof(T));
     static constexpr uint32_t kTotalSize =
         static_cast<uint32_t>(sizeof(ObjectHeader)) + kDataSize;
@@ -48,9 +50,11 @@ struct StorageObject {
      */
     [[nodiscard]] static StorageObject make(const T& value) noexcept {
         StorageObject obj{};
-        obj.data           = value;
+        obj.data            = value;
         obj.header.magic    = ObjectHeader::kMagic;
+        obj.header.objectId = kObjectId;
         obj.header.version  = kVersion;
+        obj.header.reserved = 0u;
         obj.header.dataSize = kDataSize;
         obj.header.crc      = Crc32::compute(value);
         return obj;
@@ -61,10 +65,10 @@ struct StorageObject {
     // -----------------------------------------------------------------------
 
     /**
-     * @brief Return true when the header magic and size are structurally valid.
+     * @brief Return true when the header magic, object id and size are valid.
      */
     [[nodiscard]] bool hasValidHeader() const noexcept {
-        return header.isValid(kDataSize);
+        return header.matchesSlot(kObjectId) && header.dataSize == kDataSize;
     }
 
     /**

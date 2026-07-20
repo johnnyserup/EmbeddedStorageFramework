@@ -16,8 +16,12 @@ namespace esf::examples {
  * This is a framework example only.  In your application replace this with
  * your own domain-specific struct.  Rules:
  *  - Must be trivially copyable.
- *  - Must not contain pointers or references.
- *  - Fields are ordered largest-to-smallest to avoid compiler padding.
+ *  - Must be standard layout.
+ *  - Must not contain pointers, references or dynamic containers.
+ *  - Must not contain virtual functions.
+ *  - Use fixed-width integer types for persisted fields.
+ *  - Field ordering may reduce padding, but explicit reserved bytes and
+ *    static_assert checks are still required when layout stability matters.
  *  - Update kVersion in ExampleSettingsRepository and implement a migration
  *    step whenever the layout changes in a way that breaks backward
  *    compatibility.
@@ -52,6 +56,9 @@ public:
 // Concrete implementation
 // ---------------------------------------------------------------------------
 
+inline constexpr uint16_t kExampleSettingsVersion  = 1u;
+inline constexpr uint16_t kExampleSettingsObjectId = 0x1001u;
+
 /**
  * @brief Example concrete settings repository backed by any IStorageDriver.
  *
@@ -63,10 +70,20 @@ public:
  * give the repository a domain-appropriate name.
  */
 class ExampleSettingsRepository final
-    : public esf::RepositoryBase<ExampleSettingsRepository, ExampleSettings, 1u> {
+    : public esf::RepositoryBase<ExampleSettingsRepository,
+                                 ExampleSettings,
+                                 kExampleSettingsVersion,
+                                 kExampleSettingsObjectId> {
 public:
+    static constexpr uint16_t kVersion  = kExampleSettingsVersion;
+    static constexpr uint16_t kObjectId = kExampleSettingsObjectId;
+
     /// Byte offset within the storage medium where the settings slot lives.
     static constexpr uint32_t kAddress = 0u;
+
+    /// Slot footprint used when building a storage map in the consuming project.
+    static constexpr uint32_t kSlotSize =
+        esf::StorageObject<ExampleSettings, kVersion, kObjectId>::kTotalSize;
 
     /// Factory-default settings returned when no valid slot is found.
     static constexpr ExampleSettings kDefault{};

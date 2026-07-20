@@ -13,7 +13,7 @@ enum class StorageError : uint8_t {
     Ok = 0,
     DriverError,    ///< Underlying driver reported a failure
     CrcMismatch,    ///< Stored CRC does not match computed CRC
-    InvalidMagic,   ///< Magic number in header is wrong (slot is empty/corrupt)
+    InvalidMagic,   ///< Slot header is invalid (magic/object id/reserved/size)
     VersionMismatch,///< Object version is not handled by current migration chain
     OutOfBounds,    ///< Computed address exceeds driver capacity
 };
@@ -45,7 +45,7 @@ public:
     virtual StorageError save(const T& value) = 0;
 
     /**
-     * @brief Erase persisted data and restore factory defaults.
+     * @brief Write factory defaults back to the repository slot.
      * @return Ok on success, or an appropriate StorageError.
      */
     virtual StorageError reset() = 0;

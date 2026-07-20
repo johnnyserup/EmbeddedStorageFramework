@@ -17,9 +17,10 @@ static_assert(std::is_trivially_copyable_v<SampleData>);
 
 TEST(StorageObject, MakeProducesValidObject) {
     const SampleData d{42u, 0xABu, {}};
-    const auto obj = StorageObject<SampleData>::make(d);
+    const auto obj = StorageObject<SampleData, 1u, 0x2222u>::make(d);
 
     EXPECT_TRUE(obj.isValid());
+    EXPECT_EQ(obj.header.objectId, 0x2222u);
     EXPECT_EQ(obj.data.counter, 42u);
     EXPECT_EQ(obj.data.flags, 0xABu);
 }
@@ -45,12 +46,12 @@ TEST(StorageObject, CorruptedDataFailsCrcCheck) {
 }
 
 TEST(StorageObject, VersionIsCorrect) {
-    const auto obj = StorageObject<SampleData, 3u>::make(SampleData{});
+    const auto obj = StorageObject<SampleData, 3u, 0x3333u>::make(SampleData{});
     EXPECT_EQ(obj.version(), 3u);
 }
 
 TEST(StorageObject, TotalSizeMatchesExpected) {
-    // sizeof(ObjectHeader)==12, sizeof(SampleData)==8
+    // sizeof(ObjectHeader)==16, sizeof(SampleData)==8
     EXPECT_EQ((StorageObject<SampleData>::kTotalSize),
               sizeof(ObjectHeader) + sizeof(SampleData));
 }

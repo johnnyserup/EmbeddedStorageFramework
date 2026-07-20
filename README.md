@@ -10,7 +10,7 @@ Reusable C++20 embedded persistence framework for STM32 systems with FRAM persis
 |---------|-------------|
 | **Hardware-independent core** | Core interfaces compile on any host — no STM32 headers required |
 | **Repository pattern** | Application code uses typed domain repositories, never raw addresses |
-| **Versioned objects** | Every stored slot carries a version tag and CRC for safe migration and corruption detection |
+| **Versioned objects** | Every stored slot carries magic, object id, version, length and CRC metadata for safe migration and corruption detection |
 | **Dependency injection** | All hardware details are injected — drivers, SPI HAL, etc. |
 | **No dynamic allocation** | Every allocation is stack or statically sized |
 | **TDD-friendly** | `FakeStorageDriver` and `RamStorageDriver` make host-based tests trivial |
@@ -94,7 +94,7 @@ See [docs/architecture.md](docs/architecture.md) for a full description.
                    │ IRepository<T>
 ┌──────────────────▼─────────────────────┐
 │         RepositoryBase (CRTP)          │
-│  load() → validate header+CRC → data  │
+│  load() → read header → validate → data/migrate │
 │  save() → build StorageObject → write  │
 └──────────────────┬─────────────────────┘
                    │ IStorageDriver
@@ -129,15 +129,17 @@ not inside the framework.
 struct MySettings {
     uint32_t serialNumber = 0u;
     uint8_t  channel      = 1u;
-    uint8_t  _pad[3]      = {};
+    uint8_t  _reserved[3] = {};
 };
 
 // 2. Your concrete repository
 class MySettingsRepository
-    : public esf::RepositoryBase<MySettingsRepository, MySettings, 1u>
+    : public esf::RepositoryBase<MySettingsRepository, MySettings, 1u, 0x2001u>
 {
 public:
     static constexpr uint32_t   kAddress = 0u;
+    static constexpr uint32_t   kSlotSize =
+        esf::StorageObject<MySettings, 1u, 0x2001u>::kTotalSize;
     static constexpr MySettings kDefault{};
 
     explicit MySettingsRepository(esf::IStorageDriver& drv) noexcept
@@ -163,15 +165,15 @@ repo.save(s);
 
 ## Adding a New Repository
 
-1. Define your data struct (trivially copyable, no pointers, ordered large→small to avoid padding).
-2. Create `MyRepository` extending `RepositoryBase<MyRepository, MyData, Ver>`.
+1. Define your data struct (trivially copyable, standard layout, no pointers/references/dynamic containers, explicit reserved bytes when layout stability matters).
+2. Create `MyRepository` extending
+   `RepositoryBase<MyRepository, MyData, Ver, ObjectId>`.
 3. Supply `storageAddress()` and `defaultValue()` static methods.
-4. Optionally override `migrate()` for version upgrades.
+4. Optionally override `migrate(oldVersion, payloadBytes, payloadSize, out)`
+   for version upgrades.
 
 ---
 
 ## License
 
 [MIT](LICENSE)
-
-
