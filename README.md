@@ -24,7 +24,7 @@ Reusable C++20 embedded persistence framework for STM32 systems with FRAM persis
 ```
 EmbeddedStorageFramework/
 ├── interfaces/          Pure-abstract interface headers (IStorageDriver, IRepository)
-├── core/                CRC-32, ObjectHeader, StorageObject<T>
+├── core/                CRC-32, ObjectHeader, StorageObject<T,Ver,ObjectId>
 ├── repositories/        RepositoryBase (CRTP)
 ├── drivers/
 │   ├── ram/             RamStorageDriver — static array, allocation-free
@@ -170,7 +170,8 @@ repo.save(s);
    `RepositoryBase<MyRepository, MyData, Ver, ObjectId>`.
 3. Supply `storageAddress()` and `defaultValue()` static methods.
 4. Optionally override `migrate(oldVersion, payloadBytes, payloadSize, out)`
-   for version upgrades.
+   for version upgrades. The hook receives CRC-validated raw payload bytes
+   after `load()` has read and validated the `ObjectHeader`.
 
 ---
 

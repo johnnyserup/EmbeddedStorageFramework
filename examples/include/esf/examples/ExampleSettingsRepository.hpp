@@ -62,9 +62,10 @@ inline constexpr uint16_t kExampleSettingsObjectId = 0x1001u;
 /**
  * @brief Example concrete settings repository backed by any IStorageDriver.
  *
- * Demonstrates how to derive from RepositoryBase<Derived, T, Ver>.
- * The repository stores a single StorageObject<ExampleSettings, kVersion>
- * slot starting at byte offset kAddress within the driver.
+ * Demonstrates how to derive from RepositoryBase<Derived, T, Ver, ObjectId>.
+ * The repository stores a single
+ * StorageObject<ExampleSettings, kVersion, kObjectId> slot starting at byte
+ * offset kAddress within the driver.
  *
  * In your application, replace ExampleSettings with your own data type and
  * give the repository a domain-appropriate name.

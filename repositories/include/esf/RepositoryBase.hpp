@@ -16,7 +16,7 @@ namespace esf {
  *
  * Derived classes only need to supply:
  *  - a StorageAddress (byte offset into the driver)
- *  - a stable object identifier unique within the storage map
+ *  - a stable ObjectId template argument unique within the storage map
  *  - a default value returned when no valid slot is found
  *
  * Usage:
@@ -26,7 +26,7 @@ namespace esf {
  * {
  *     static constexpr uint32_t kAddress = 0;
  *     static constexpr Settings kDefault = {};
- *     // ... see SettingsRepository.hpp for a full example
+ *     // ... see ExampleSettingsRepository.hpp for a full example
  * };
  * @endcode
  *
@@ -135,7 +135,8 @@ protected:
      *
      * Derived classes may override this to implement forward/backward
      * migration between object versions without depending on the current
-     * in-memory layout of T.
+     * in-memory layout of T. The hook is called only after load() has
+     * validated the slot header and CRC-checked the raw payload bytes.
      */
     StorageError migrate(uint16_t /*oldVersion*/,
                          const uint8_t* /*payloadBytes*/,

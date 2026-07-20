@@ -25,9 +25,9 @@ struct ObjectHeader {
     /**
      * @brief Return true when the header looks structurally valid.
      *
-     * This only checks the magic and object identifier — payload size and
-     * CRC validation are separate steps so that callers can distinguish
-     * "wrong slot" from "corrupted data".
+     * This only checks the magic, object identifier and reserved field —
+     * payload size and CRC validation are separate steps so that callers can
+     * distinguish "wrong slot" from "corrupted data".
      */
     [[nodiscard]] constexpr bool matchesSlot(uint16_t expectedObjectId) const noexcept {
         return magic == kMagic && objectId == expectedObjectId && reserved == 0u;

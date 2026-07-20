@@ -22,11 +22,12 @@ persistence for embedded firmware.  It follows the **Repository pattern** and
                            │
 ┌──────────────────────────▼────────────────────────────┐
 │              Repository Layer  (repositories/)        │
-│   RepositoryBase<Derived,T,Ver>                       │
+│   RepositoryBase<Derived,T,Ver,ObjectId>              │
 │   ExampleSettingsRepository  (example in examples/)  │
 │                                                       │
 │   Responsibilities:                                   │
-│   • Wrap T in StorageObject<T,Ver> (adds header+CRC)  │
+│   • Wrap T in StorageObject<T,Ver,ObjectId>           │
+│     (adds header+CRC)                                 │
 │   • Implement load / save / reset                     │
 │   • Dispatch to a version-migration handler           │
 └──────────────────────────┬────────────────────────────┘
@@ -72,7 +73,7 @@ StorageError save (const T& value);
 StorageError reset(); // writes factory defaults to the slot
 ```
 
-### `StorageObject<T, Ver>`  _(core/)_
+### `StorageObject<T, Ver, ObjectId>`  _(core/)_
 
 The unit of persistence.  Combines an `ObjectHeader` (magic, object id,
 version, size, CRC-32) with the raw bytes of `T`.  The on-storage layout is:
@@ -104,7 +105,7 @@ CRTP base that implements `load` / `save` / `reset` on top of any
 `IStorageDriver`.  Derived classes supply only:
 
 - `storageAddress()` — byte offset in the driver.
-- `objectId` — a stable slot identifier encoded in the header.
+- `ObjectId` — a stable slot identifier encoded in the header.
 - `defaultValue()` — factory-default T returned when no valid slot exists.
 - Optionally `migrate(oldVersion, payloadBytes, payloadSize, out)` for version
   upgrades when an older payload layout must be mapped into the current `T`.
@@ -117,7 +118,7 @@ CRTP base that implements `load` / `save` / `reset` on top of any
 save(value)
     │
     ▼
-StorageObject<T,Ver>::make(value)
+StorageObject<T,Ver,ObjectId>::make(value)
     • header.magic    = 0xCAFE
     • header.objectId = ObjectId
     • header.version  = Ver
@@ -180,9 +181,11 @@ When the layout of a persisted struct changes:
 3. Decode the old payload bytes according to `oldVersion`, map old fields to
    the new struct, then write the migrated version back with `save()`.
 
-The migration hook intentionally receives raw payload bytes instead of
-`StorageObject<T,Ver>` so that migration remains possible even when
-`sizeof(T)` or field layout changes between versions.
+The migration hook intentionally receives `(oldVersion, payloadBytes,
+payloadSize)` instead of `StorageObject<T,Ver,ObjectId>` or `T` so that
+migration remains possible even when `sizeof(T)` or field layout changes
+between versions. `RepositoryBase::load()` reads and validates the header
+first, then CRC-checks the raw payload bytes before calling the hook.
 
 Unhandled versions return `StorageError::VersionMismatch` and fall back to
 factory defaults.
@@ -309,8 +312,8 @@ Available CMake targets:
 | Target | Contents |
 |--------|----------|
 | `esf::interfaces` | `IStorageDriver`, `IRepository<T>`, `StorageError` |
-| `esf::core` | `Crc32`, `ObjectHeader`, `StorageObject<T,Ver>` |
-| `esf::repositories` | `RepositoryBase<Derived,T,Ver>` |
+| `esf::core` | `Crc32`, `ObjectHeader`, `StorageObject<T,Ver,ObjectId>` |
+| `esf::repositories` | `RepositoryBase<Derived,T,Ver,ObjectId>` |
 | `esf::driver_ram` | `RamStorageDriver<N>` |
 | `esf::driver_fram` | `FramStorageDriver<N>`, `ISpiHal` |
 | `esf::examples` | `ExampleSettings`, `ExampleSettingsRepository` (host/test only) |
