@@ -25,15 +25,15 @@ Reusable C++20 embedded persistence framework for STM32 systems with FRAM persis
 EmbeddedStorageFramework/
 ├── interfaces/          Pure-abstract interface headers (IStorageDriver, IRepository)
 ├── core/                CRC-32, ObjectHeader, StorageObject<T>
-├── repositories/        RepositoryBase (CRTP), SettingsRepository example
+├── repositories/        RepositoryBase (CRTP)
 ├── drivers/
 │   ├── ram/             RamStorageDriver — static array, allocation-free
 │   └── fram/            FramStorageDriver — MB85RS SPI FRAM skeleton + ISpiHal
+├── examples/            Example data types and repositories (host builds only)
 ├── tests/
 │   ├── fake/            FakeStorageDriver with fault injection and call counters
 │   └── unit/            Google Test unit tests
 ├── docs/                Architecture documentation
-├── examples/            Usage examples
 └── stm32-testbench/     STM32 hardware integration test project
 ```
 
@@ -58,13 +58,27 @@ ctest --test-dir build --output-on-failure
 ### Integrating as a Git submodule
 
 ```bash
-# In your firmware project
+# Add the framework to your firmware project
 git submodule add https://github.com/johnnyserup/EmbeddedStorageFramework.git extern/esf
-
-# In your CMakeLists.txt
-add_subdirectory(extern/esf)
-target_link_libraries(my_firmware PRIVATE esf::repositories esf::driver_fram)
+git submodule update --init --recursive
 ```
+
+In your `CMakeLists.txt`:
+
+```cmake
+add_subdirectory(extern/esf)
+
+# Link only the layers your firmware needs
+target_link_libraries(my_firmware PRIVATE
+    esf::repositories   # RepositoryBase + IRepository<T>
+    esf::driver_fram    # FramStorageDriver + ISpiHal
+)
+```
+
+The `examples` and `tests` subdirectories are excluded automatically when
+`CMAKE_CROSSCOMPILING` is set (i.e. when building for an embedded target).
+
+See [docs/architecture.md](docs/architecture.md) for a detailed integration guide.
 
 ---
 
@@ -75,7 +89,7 @@ See [docs/architecture.md](docs/architecture.md) for a full description.
 ```
 ┌────────────────────────────────────────┐
 │           Application Layer            │
-│   (uses ISettingsRepository only)      │
+│   (uses IRepository<T> interfaces)     │
 └──────────────────┬─────────────────────┘
                    │ IRepository<T>
 ┌──────────────────▼─────────────────────┐
@@ -101,20 +115,47 @@ See [docs/architecture.md](docs/architecture.md) for a full description.
 
 ## Usage Example
 
+The `examples/` directory contains `ExampleSettingsRepository` which shows
+how to derive a concrete repository from `RepositoryBase`.  In your own
+firmware project define your application data types and repositories there,
+not inside the framework.
+
 ```cpp
-#include "esf/SettingsRepository.hpp"
+// ── In your firmware project ─────────────────────────────────────────────
+#include "esf/RepositoryBase.hpp"
 #include "esf/drivers/RamStorageDriver.hpp"
 
-// Use RamStorageDriver for host tests; swap for FramStorageDriver on target
-esf::drivers::RamStorageDriver<1024> driver;
-esf::SettingsRepository repo{driver};
+// 1. Your application data type (lives in your project, not in the framework)
+struct MySettings {
+    uint32_t serialNumber = 0u;
+    uint8_t  channel      = 1u;
+    uint8_t  _pad[3]      = {};
+};
 
-esf::Settings s{};
+// 2. Your concrete repository
+class MySettingsRepository
+    : public esf::RepositoryBase<MySettingsRepository, MySettings, 1u>
+{
+public:
+    static constexpr uint32_t   kAddress = 0u;
+    static constexpr MySettings kDefault{};
+
+    explicit MySettingsRepository(esf::IStorageDriver& drv) noexcept
+        : RepositoryBase(drv) {}
+
+    static constexpr uint32_t   storageAddress() noexcept { return kAddress; }
+    static constexpr MySettings defaultValue()   noexcept { return kDefault; }
+};
+
+// 3. Wire up and use
+esf::drivers::RamStorageDriver<1024> driver;  // swap for FramStorageDriver on target
+MySettingsRepository repo{driver};
+
+MySettings s{};
 if (repo.load(s) != esf::StorageError::Ok) {
     repo.reset(); // write factory defaults
 }
-
-s.volumeLevel = 80;
+s.channel = 3;
 repo.save(s);
 ```
 
@@ -132,4 +173,5 @@ repo.save(s);
 ## License
 
 [MIT](LICENSE)
+
 

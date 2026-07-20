@@ -4,24 +4,25 @@
 
 #include <cstdint>
 
-namespace esf {
+namespace esf::examples {
 
 // ---------------------------------------------------------------------------
 // Example data type
 // ---------------------------------------------------------------------------
 
 /**
- * @brief Application settings persisted in storage.
+ * @brief Example settings struct demonstrating a persisted data model.
  *
- * This is a minimal example struct.  In a real product you would add your
- * own fields here.  Rules:
+ * This is a framework example only.  In your application replace this with
+ * your own domain-specific struct.  Rules:
  *  - Must be trivially copyable.
  *  - Must not contain pointers or references.
  *  - Fields are ordered largest-to-smallest to avoid compiler padding.
- *  - Update kVersion below and implement a migration step whenever the
- *    layout changes in a way that breaks backward compatibility.
+ *  - Update kVersion in ExampleSettingsRepository and implement a migration
+ *    step whenever the layout changes in a way that breaks backward
+ *    compatibility.
  */
-struct Settings {
+struct ExampleSettings {
     uint32_t deviceId          = 0u;    ///< Unique device identifier
     uint8_t  displayBrightness = 100u;  ///< 0–100 %
     uint8_t  volumeLevel       = 50u;   ///< 0–100 %
@@ -29,22 +30,22 @@ struct Settings {
     uint8_t  _reserved         = 0u;   ///< Reserved — must be zero
 };
 
-static_assert(sizeof(Settings) == 8,
-              "Settings layout changed — bump kVersion and add a migration step");
+static_assert(sizeof(ExampleSettings) == 8,
+              "ExampleSettings layout changed — bump kVersion and add a migration step");
 
 // ---------------------------------------------------------------------------
 // Repository interface
 // ---------------------------------------------------------------------------
 
 /**
- * @brief Pure-virtual interface for the settings repository.
+ * @brief Example pure-virtual interface for an example settings repository.
  *
- * The application layer programs against this interface so that the concrete
+ * Application code programs against this interface so that the concrete
  * implementation (and the underlying storage driver) can be swapped freely.
  */
-class ISettingsRepository : public IRepository<Settings> {
+class IExampleSettingsRepository : public esf::IRepository<ExampleSettings> {
 public:
-    ~ISettingsRepository() override = default;
+    ~IExampleSettingsRepository() override = default;
 };
 
 // ---------------------------------------------------------------------------
@@ -52,21 +53,25 @@ public:
 // ---------------------------------------------------------------------------
 
 /**
- * @brief Concrete settings repository backed by any IStorageDriver.
+ * @brief Example concrete settings repository backed by any IStorageDriver.
  *
- * The repository stores a single StorageObject<Settings, kVersion> slot
- * starting at byte offset kAddress within the driver.
+ * Demonstrates how to derive from RepositoryBase<Derived, T, Ver>.
+ * The repository stores a single StorageObject<ExampleSettings, kVersion>
+ * slot starting at byte offset kAddress within the driver.
+ *
+ * In your application, replace ExampleSettings with your own data type and
+ * give the repository a domain-appropriate name.
  */
-class SettingsRepository final
-    : public RepositoryBase<SettingsRepository, Settings, 1u> {
+class ExampleSettingsRepository final
+    : public esf::RepositoryBase<ExampleSettingsRepository, ExampleSettings, 1u> {
 public:
     /// Byte offset within the storage medium where the settings slot lives.
     static constexpr uint32_t kAddress = 0u;
 
     /// Factory-default settings returned when no valid slot is found.
-    static constexpr Settings kDefault{};
+    static constexpr ExampleSettings kDefault{};
 
-    explicit SettingsRepository(IStorageDriver& driver) noexcept
+    explicit ExampleSettingsRepository(esf::IStorageDriver& driver) noexcept
         : RepositoryBase(driver) {}
 
     // -----------------------------------------------------------------------
@@ -77,9 +82,9 @@ public:
         return kAddress;
     }
 
-    [[nodiscard]] static constexpr Settings defaultValue() noexcept {
+    [[nodiscard]] static constexpr ExampleSettings defaultValue() noexcept {
         return kDefault;
     }
 };
 
-} // namespace esf
+} // namespace esf::examples

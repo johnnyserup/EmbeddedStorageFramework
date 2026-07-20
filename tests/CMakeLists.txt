@@ -41,6 +41,7 @@ add_executable(esf_tests
 target_link_libraries(esf_tests PRIVATE
     esf::core
     esf::repositories
+    esf::examples
     esf::fake
     GTest::gtest_main
 )

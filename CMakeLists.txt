@@ -41,6 +41,13 @@ add_subdirectory(drivers/ram)
 add_subdirectory(drivers/fram)
 
 # ---------------------------------------------------------------------------
+# Examples (host builds — example data types and repositories)
+# ---------------------------------------------------------------------------
+if(NOT CMAKE_CROSSCOMPILING)
+    add_subdirectory(examples)
+endif()
+
+# ---------------------------------------------------------------------------
 # Tests (host-only)
 # ---------------------------------------------------------------------------
 if(NOT CMAKE_CROSSCOMPILING)

@@ -1,47 +1,47 @@
-#include "esf/SettingsRepository.hpp"
+#include "esf/examples/ExampleSettingsRepository.hpp"
 #include "esf/fake/FakeStorageDriver.hpp"
 
 #include <gtest/gtest.h>
 
-using esf::Settings;
-using esf::SettingsRepository;
+using esf::examples::ExampleSettings;
+using esf::examples::ExampleSettingsRepository;
 using esf::StorageError;
 using esf::fake::FakeStorageDriver;
 
-// A driver large enough to hold one SettingsRepository slot
+// A driver large enough to hold one ExampleSettingsRepository slot
 static constexpr size_t kDriverSize =
-    esf::StorageObject<Settings, 1u>::kTotalSize + 64u;
+    esf::StorageObject<ExampleSettings, 1u>::kTotalSize + 64u;
 
 using Driver = FakeStorageDriver<kDriverSize>;
 
-class SettingsRepositoryTest : public ::testing::Test {
+class ExampleSettingsRepositoryTest : public ::testing::Test {
 protected:
     void SetUp() override {
         driver.fill(0xFFu); // Simulate erased FRAM (all 0xFF)
     }
 
-    Driver             driver;
-    SettingsRepository repo{driver};
+    Driver                    driver;
+    ExampleSettingsRepository repo{driver};
 };
 
-TEST_F(SettingsRepositoryTest, LoadFromErasedStorageReturnsInvalidMagic) {
-    Settings s{};
+TEST_F(ExampleSettingsRepositoryTest, LoadFromErasedStorageReturnsInvalidMagic) {
+    ExampleSettings s{};
     const auto err = repo.load(s);
     EXPECT_EQ(err, StorageError::InvalidMagic);
 }
 
-TEST_F(SettingsRepositoryTest, LoadFromErasedStorageReturnsDefaults) {
-    Settings s{};
+TEST_F(ExampleSettingsRepositoryTest, LoadFromErasedStorageReturnsDefaults) {
+    ExampleSettings s{};
     repo.load(s);
-    const Settings def = SettingsRepository::kDefault;
+    const ExampleSettings def = ExampleSettingsRepository::kDefault;
     EXPECT_EQ(s.displayBrightness, def.displayBrightness);
     EXPECT_EQ(s.volumeLevel,       def.volumeLevel);
     EXPECT_EQ(s.deviceId,          def.deviceId);
     EXPECT_EQ(s.featureEnabled,    def.featureEnabled);
 }
 
-TEST_F(SettingsRepositoryTest, SaveAndLoadRoundTrip) {
-    Settings original{};
+TEST_F(ExampleSettingsRepositoryTest, SaveAndLoadRoundTrip) {
+    ExampleSettings original{};
     original.displayBrightness = 75u;
     original.volumeLevel       = 30u;
     original.deviceId          = 0xABCDEF01u;
@@ -49,7 +49,7 @@ TEST_F(SettingsRepositoryTest, SaveAndLoadRoundTrip) {
 
     ASSERT_EQ(repo.save(original), StorageError::Ok);
 
-    Settings loaded{};
+    ExampleSettings loaded{};
     ASSERT_EQ(repo.load(loaded), StorageError::Ok);
 
     EXPECT_EQ(loaded.displayBrightness, original.displayBrightness);
@@ -58,25 +58,25 @@ TEST_F(SettingsRepositoryTest, SaveAndLoadRoundTrip) {
     EXPECT_EQ(loaded.featureEnabled,    original.featureEnabled);
 }
 
-TEST_F(SettingsRepositoryTest, ResetRestoresDefaults) {
+TEST_F(ExampleSettingsRepositoryTest, ResetRestoresDefaults) {
     // Save some non-default values
-    Settings modified{};
+    ExampleSettings modified{};
     modified.displayBrightness = 10u;
     ASSERT_EQ(repo.save(modified), StorageError::Ok);
 
     // Now reset
     ASSERT_EQ(repo.reset(), StorageError::Ok);
 
-    Settings after{};
+    ExampleSettings after{};
     ASSERT_EQ(repo.load(after), StorageError::Ok);
 
     EXPECT_EQ(after.displayBrightness,
-              SettingsRepository::kDefault.displayBrightness);
+              ExampleSettingsRepository::kDefault.displayBrightness);
 }
 
-TEST_F(SettingsRepositoryTest, CorruptedCrcReturnsError) {
+TEST_F(ExampleSettingsRepositoryTest, CorruptedCrcReturnsError) {
     // Write valid data
-    Settings s{};
+    ExampleSettings s{};
     s.deviceId = 0xDEADBEEFu;
     ASSERT_EQ(repo.save(s), StorageError::Ok);
 
@@ -84,37 +84,38 @@ TEST_F(SettingsRepositoryTest, CorruptedCrcReturnsError) {
     constexpr uint32_t corruptOffset =
         static_cast<uint32_t>(sizeof(esf::ObjectHeader)) + 0u;
     uint8_t corrupt = 0xFFu;
-    driver.write(SettingsRepository::kAddress + corruptOffset, &corrupt, 1u);
+    driver.write(ExampleSettingsRepository::kAddress + corruptOffset, &corrupt, 1u);
 
-    Settings loaded{};
+    ExampleSettings loaded{};
     EXPECT_EQ(repo.load(loaded), StorageError::CrcMismatch);
 }
 
-TEST_F(SettingsRepositoryTest, DriverWriteFailureReturnedOnSave) {
+TEST_F(ExampleSettingsRepositoryTest, DriverWriteFailureReturnedOnSave) {
     driver.setWriteFail(true);
-    Settings s{};
+    ExampleSettings s{};
     EXPECT_EQ(repo.save(s), StorageError::DriverError);
 }
 
-TEST_F(SettingsRepositoryTest, DriverReadFailureReturnedOnLoad) {
+TEST_F(ExampleSettingsRepositoryTest, DriverReadFailureReturnedOnLoad) {
     // First write valid data
-    ASSERT_EQ(repo.save(Settings{}), StorageError::Ok);
+    ASSERT_EQ(repo.save(ExampleSettings{}), StorageError::Ok);
 
     driver.setReadFail(true);
-    Settings s{};
+    ExampleSettings s{};
     EXPECT_EQ(repo.load(s), StorageError::DriverError);
 }
 
-TEST_F(SettingsRepositoryTest, MultipleSaveOverwritesPreviousValue) {
-    Settings first{};
+TEST_F(ExampleSettingsRepositoryTest, MultipleSaveOverwritesPreviousValue) {
+    ExampleSettings first{};
     first.volumeLevel = 10u;
     ASSERT_EQ(repo.save(first), StorageError::Ok);
 
-    Settings second{};
+    ExampleSettings second{};
     second.volumeLevel = 99u;
     ASSERT_EQ(repo.save(second), StorageError::Ok);
 
-    Settings loaded{};
+    ExampleSettings loaded{};
     ASSERT_EQ(repo.load(loaded), StorageError::Ok);
     EXPECT_EQ(loaded.volumeLevel, 99u);
 }
+

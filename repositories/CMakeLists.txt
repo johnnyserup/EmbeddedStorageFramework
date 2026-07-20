@@ -1,5 +1,5 @@
 # ---------------------------------------------------------------------------
-# esf::repositories — RepositoryBase, SettingsRepository (header-only)
+# esf::repositories — RepositoryBase CRTP base (header-only)
 # ---------------------------------------------------------------------------
 add_library(esf_repositories INTERFACE)
 add_library(esf::repositories ALIAS esf_repositories)

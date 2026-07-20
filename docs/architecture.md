@@ -23,7 +23,7 @@ persistence for embedded firmware.  It follows the **Repository pattern** and
 ┌──────────────────────────▼────────────────────────────┐
 │              Repository Layer  (repositories/)        │
 │   RepositoryBase<Derived,T,Ver>                       │
-│   SettingsRepository  (example)                       │
+│   ExampleSettingsRepository  (example in examples/)  │
 │                                                       │
 │   Responsibilities:                                   │
 │   • Wrap T in StorageObject<T,Ver> (adds header+CRC)  │
@@ -181,7 +181,122 @@ factory defaults.
 
 ---
 
-## Design Decisions
+## Boundary Rules
+
+The framework enforces a strict separation between reusable infrastructure and
+application-specific code.
+
+| Location | Allowed content |
+|----------|-----------------|
+| `interfaces/` | Pure-abstract interfaces (`IStorageDriver`, `IRepository<T>`, `StorageError`) |
+| `core/` | CRC, `ObjectHeader`, `StorageObject` — no application data types |
+| `repositories/` | `RepositoryBase` CRTP only — no concrete data models |
+| `drivers/ram/` | `RamStorageDriver` — static array, allocation-free |
+| `drivers/fram/` | `FramStorageDriver`, `ISpiHal` — FRAM/SPI only, no application logic |
+| `examples/` | Example data types (e.g. `ExampleSettings`) and example repositories |
+| `tests/` | Host-only test code; `FakeStorageDriver` lives here |
+
+**Application data models** (real settings structs, calibration data, logs, etc.)
+belong in the **consuming firmware project**, not in this framework.
+
+---
+
+## Using as a Git Submodule
+
+### Adding to a firmware project
+
+```bash
+# Add the framework as a submodule
+git submodule add https://github.com/johnnyserup/EmbeddedStorageFramework.git extern/esf
+git submodule update --init --recursive
+```
+
+### CMake integration
+
+In your firmware project's `CMakeLists.txt`:
+
+```cmake
+# Add the framework (examples and tests are excluded when cross-compiling)
+add_subdirectory(extern/esf)
+
+# Link only the layers you need
+target_link_libraries(my_firmware PRIVATE
+    esf::repositories   # RepositoryBase + IRepository<T>
+    esf::driver_fram    # FramStorageDriver + ISpiHal
+)
+```
+
+Available CMake targets:
+
+| Target | Contents |
+|--------|----------|
+| `esf::interfaces` | `IStorageDriver`, `IRepository<T>`, `StorageError` |
+| `esf::core` | `Crc32`, `ObjectHeader`, `StorageObject<T,Ver>` |
+| `esf::repositories` | `RepositoryBase<Derived,T,Ver>` |
+| `esf::driver_ram` | `RamStorageDriver<N>` |
+| `esf::driver_fram` | `FramStorageDriver<N>`, `ISpiHal` |
+| `esf::examples` | `ExampleSettings`, `ExampleSettingsRepository` (host/test only) |
+| `esf::fake` | `FakeStorageDriver<N>` (host/test only) |
+
+### What to implement in the consuming project
+
+1. **SPI HAL adapter** — implement `ISpiHal` to bridge `FramStorageDriver` to
+   your MCU's SPI peripheral (e.g. STM32 HAL `HAL_SPI_TransmitReceive`).
+
+2. **Application data types** — define your own trivially-copyable structs
+   (settings, calibration data, log entries, etc.).
+
+3. **Concrete repositories** — derive from `RepositoryBase<MyRepo, MyData, Ver>`,
+   supply `storageAddress()` and `defaultValue()`, and optionally override
+   `migrate()`.
+
+4. **Driver wiring** — construct a `FramStorageDriver` (or `RamStorageDriver`
+   for tests), inject it into your repository, and inject the repository
+   into your application layer via `IRepository<T>`.
+
+### Minimal integration example
+
+```cpp
+// In your firmware project — NOT in the framework
+
+#include "esf/RepositoryBase.hpp"
+#include "esf/drivers/FramStorageDriver.hpp"
+#include "MySpiBridge.hpp"   // your ISpiHal implementation
+
+// 1. Define your application data type
+struct MySettings {
+    uint32_t serialNumber = 0u;
+    uint8_t  channel      = 1u;
+    uint8_t  _pad[3]      = {};
+};
+
+// 2. Define a concrete repository
+class MySettingsRepository
+    : public esf::RepositoryBase<MySettingsRepository, MySettings, 1u>
+{
+public:
+    static constexpr uint32_t  kAddress = 0u;
+    static constexpr MySettings kDefault{};
+
+    explicit MySettingsRepository(esf::IStorageDriver& drv) noexcept
+        : RepositoryBase(drv) {}
+
+    static constexpr uint32_t   storageAddress() noexcept { return kAddress; }
+    static constexpr MySettings defaultValue()   noexcept { return kDefault; }
+};
+
+// 3. Wire it all together
+MySpiBridge            hal;
+esf::drivers::FramStorageDriver<8192> driver{hal};
+MySettingsRepository   repo{driver};
+
+MySettings s{};
+if (repo.load(s) != esf::StorageError::Ok) {
+    repo.reset();
+}
+```
+
+
 
 | Decision | Rationale |
 |----------|-----------|
