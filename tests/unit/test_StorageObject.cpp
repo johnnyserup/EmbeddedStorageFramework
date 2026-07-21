@@ -66,6 +66,23 @@ TEST(StorageObject, CorruptedHeaderMagicFailsValidation) {
     EXPECT_FALSE(obj.isValid());
 }
 
+TEST(StorageObject, CrcFieldIsUint32) {
+    // Verify the CRC field in ObjectHeader is exactly 32 bits wide.
+    // This guards against any accidental downgrade from CRC-32 to CRC-16.
+    static_assert(sizeof(ObjectHeader{}.crc) == sizeof(uint32_t),
+                  "ObjectHeader::crc must be uint32_t (CRC-32)");
+    SUCCEED();
+}
+
+TEST(StorageObject, CrcValueMatchesCrc32) {
+    // Verify that the CRC stored by StorageObject::make() is a valid CRC-32
+    // value (i.e. it matches an independent Crc32::compute call on the data).
+    using esf::Crc32;
+    const SampleData d{0x12345678u, 0xABu, {}};
+    const auto obj = StorageObject<SampleData>::make(d);
+    EXPECT_EQ(obj.header.crc, Crc32::compute(d));
+}
+
 TEST(StorageObject, DataSizeMismatchFailsHeaderValidation) {
     auto obj = StorageObject<SampleData>::make(SampleData{});
     ASSERT_TRUE(obj.isValid());

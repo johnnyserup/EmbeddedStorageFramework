@@ -37,4 +37,9 @@ struct ObjectHeader {
 static_assert(sizeof(ObjectHeader) == 16,
               "ObjectHeader layout changed — update flash image migration notes");
 
+// Explicitly assert the checksum field width so that a future refactor cannot
+// silently downgrade from CRC-32 (uint32_t) to CRC-16 (uint16_t).
+static_assert(sizeof(ObjectHeader{}.crc) == sizeof(uint32_t),
+              "ObjectHeader::crc must be uint32_t (CRC-32) — do not downgrade to uint16_t");
+
 } // namespace esf
