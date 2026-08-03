@@ -36,6 +36,7 @@ add_executable(esf_tests
     unit/test_StorageObject.cpp
     unit/test_FakeStorageDriver.cpp
     unit/test_SettingsRepository.cpp
+    unit/test_FramStorageDriver.cpp
 )
 
 target_link_libraries(esf_tests PRIVATE
@@ -43,6 +44,7 @@ target_link_libraries(esf_tests PRIVATE
     esf::repositories
     esf::examples
     esf::fake
+    esf::driver_fram
     GTest::gtest_main
 )
 
