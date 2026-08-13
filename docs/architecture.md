@@ -213,15 +213,75 @@ layout with `static_assert(sizeof(T) == expected)` checks.
 
 ## Power-Loss Behavior
 
-The current bootstrap uses a single slot per repository. If power is lost
-during a write, the slot may contain a torn header or torn payload. The first
+### Single-slot (`RepositoryBase`)
+
+The single-slot base uses one storage slot per repository.  If power is lost
+during a write, the slot may contain a torn header or torn payload.  The first
 version handles this by detecting invalid magic/object id or CRC mismatch and
 falling back to defaults or migration behavior.
 
-For settings or calibration data that require stronger persistence guarantees, a
-future evolution should use a two-slot commit scheme with a generation counter
-so that one previously valid image remains recoverable after an interrupted
-write.
+### Two-slot (`DualSlotRepositoryBase`)
+
+`DualSlotRepositoryBase` provides stronger persistence guarantees by keeping
+two identically-sized slots (A and B) in a ping-pong arrangement.
+
+**On-storage layout per slot**
+
+```
+[ ObjectHeader (16 bytes, reserved = generation) ][ T (sizeof(T) bytes) ]
+```
+
+The `ObjectHeader::reserved` field carries a **16-bit wrapping generation
+counter** instead of the usual zero.  Two slots are stored back-to-back:
+
+```
+[ Slot A at storageAddress() ][ Slot B at storageAddress() + kSlotSize ]
+```
+
+**Write protocol**
+
+1. Read both slot headers and determine the currently active slot (the one
+   with the higher valid generation using wrapping comparison).
+2. Write the new data to the *standby* slot with `generation = active.generation + 1`.
+3. If power is lost mid-write the standby slot fails CRC validation and the
+   previously active slot remains valid and readable.
+
+**Load protocol**
+
+1. Read and CRC-validate both slot headers.
+2. Pick the slot with the higher valid generation.
+3. If neither slot is valid, return `InvalidMagic` and factory defaults.
+4. If the selected slot's version mismatches, invoke the migration hook.
+
+**Generation wrapping**
+
+The 16-bit generation counter wraps at 65535 → 0.  Newer/older comparison uses
+the standard half-range rule: generation A is newer than B when
+`(A − B) mod 2^16 < 2^15`.
+
+**Total storage footprint**
+
+`DualSlotRepositoryBase::kTotalStorageSize = 2 × kSlotSize` bytes starting at
+`storageAddress()`.
+
+**Usage**
+
+```cpp
+class MySettingsRepository
+    : public esf::DualSlotRepositoryBase<MySettingsRepository,
+                                          MySettings, 1u, 0x2001u>
+{
+public:
+    static constexpr uint32_t  kAddress = 0u;
+    static constexpr MySettings kDefault{};
+
+    explicit MySettingsRepository(esf::IStorageDriver& drv) noexcept
+        : DualSlotRepositoryBase(drv) {}
+
+    static constexpr uint32_t   storageAddress() noexcept { return kAddress; }
+    static constexpr MySettings defaultValue()   noexcept { return kDefault; }
+};
+```
 
 ---
 
@@ -271,7 +331,7 @@ application-specific code.
 |----------|-----------------|
 | `interfaces/` | Pure-abstract interfaces (`IStorageDriver`, `IRepository<T>`, `StorageError`) |
 | `core/` | CRC, `ObjectHeader`, `StorageObject` — no application data types |
-| `repositories/` | `RepositoryBase` CRTP only — no concrete data models |
+| `repositories/` | `RepositoryBase` CRTP only, `DualSlotRepositoryBase` CRTP only — no concrete data models |
 | `drivers/ram/` | `RamStorageDriver` — static array, allocation-free |
 | `drivers/fram/` | `FramStorageDriver`, `ISpiHal` — FRAM/SPI only, no application logic |
 | `examples/` | Example data types (e.g. `ExampleSettings`) and example repositories |
@@ -313,7 +373,7 @@ Available CMake targets:
 |--------|----------|
 | `esf::interfaces` | `IStorageDriver`, `IRepository<T>`, `StorageError` |
 | `esf::core` | `Crc32`, `ObjectHeader`, `StorageObject<T,Ver,ObjectId>` |
-| `esf::repositories` | `RepositoryBase<Derived,T,Ver,ObjectId>` |
+| `esf::repositories` | `RepositoryBase<Derived,T,Ver,ObjectId>`, `DualSlotRepositoryBase<Derived,T,Ver,ObjectId>` |
 | `esf::driver_ram` | `RamStorageDriver<N>` |
 | `esf::driver_fram` | `FramStorageDriver<N>`, `ISpiHal` |
 | `esf::examples` | `ExampleSettings`, `ExampleSettingsRepository` (host/test only) |
