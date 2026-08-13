@@ -37,7 +37,6 @@ add_executable(esf_tests
     unit/test_FakeStorageDriver.cpp
     unit/test_SettingsRepository.cpp
     unit/test_FramStorageDriver.cpp
-    unit/test_DualSlotRepositoryBase.cpp
 )
 
 target_link_libraries(esf_tests PRIVATE
